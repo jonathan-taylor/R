@@ -25,9 +25,9 @@ gaussian_instance = function(n, p, s, sigma=1, rho=0, signal=6, X=NA,
 }
 
 
-collect_results = function(n,p,s, nsim=100, level=0.9){
+collect_results = function(n,p,s, nsim=100, level=0.9, condition_subgrad=TRUE){
   rho=0.3
-  lam=1.
+  lam=1.2
   sigma=1
   sample_pvalues = c()
   sample_coverage = c()
@@ -36,21 +36,21 @@ collect_results = function(n,p,s, nsim=100, level=0.9){
     X=data$X
     y=data$y
     beta=data$beta
-    ridge_term=sd(y)/sqrt(n)
-    noise_scale = sd(y)/2
-    result = selectiveInference:::randomized_inference(X,y,sigma,lam,noise_scale,ridge_term, level)
-    if (length(result$active_set)>0){
-      true_beta = beta[result$active_set]
-      coverage = rep(0, nrow(result$ci))
-      for (i in 1:nrow(result$ci)){
-        if (result$ci[i,1]<true_beta[i] & result$ci[i,2]>true_beta[i]){
-          coverage[i]=1
-        }
-        print(paste("ci", toString(result$ci[i,])))
+
+    result = selectiveInference:::randomizedLassoInf(X, y, lam, level=level, burnin=2000, nsample=4000, condition_subgrad=condition_subgrad)
+    true_beta = beta[result$active_set]
+    coverage = rep(0, nrow(result$ci))
+    for (i in 1:nrow(result$ci)){
+      if (result$ci[i,1]<true_beta[i] & result$ci[i,2]>true_beta[i]){
+        coverage[i]=1
       }
       sample_pvalues = c(sample_pvalues, result$pvalues)
       sample_coverage = c(sample_coverage, coverage)
     }
+
+    sample_pvalues = c(sample_pvalues, result$pvalues)
+    sample_coverage = c(sample_coverage, coverage)
+    print(paste("coverage", mean(sample_coverage)))
   }
   if (length(sample_coverage)>0){
     print(paste("coverage", mean(sample_coverage)))
