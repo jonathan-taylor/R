@@ -36,6 +36,7 @@ collect_results = function(n,p,s, nsim=100, level=0.9, condition_subgrad=TRUE){
     X=data$X
     y=data$y
     beta=data$beta
+
     result = selectiveInference:::randomizedLassoInf(X, y, lam, level=level, burnin=2000, nsample=4000, condition_subgrad=condition_subgrad)
     true_beta = beta[result$active_set]
     coverage = rep(0, nrow(result$ci))
@@ -43,17 +44,21 @@ collect_results = function(n,p,s, nsim=100, level=0.9, condition_subgrad=TRUE){
       if (result$ci[i,1]<true_beta[i] & result$ci[i,2]>true_beta[i]){
         coverage[i]=1
       }
-      print(paste("ci", toString(result$ci[i,])))
+      sample_pvalues = c(sample_pvalues, result$pvalues)
+      sample_coverage = c(sample_coverage, coverage)
     }
+
     sample_pvalues = c(sample_pvalues, result$pvalues)
     sample_coverage = c(sample_coverage, coverage)
     print(paste("coverage", mean(sample_coverage)))
   }
-  print(paste("coverage", mean(sample_coverage)))
-  jpeg('pivots.jpg')
-  plot(ecdf(sample_pvalues), xlim=c(0,1),  main="Empirical CDF of null p-values", xlab="p-values", ylab="ecdf")
-  abline(0, 1, lty=2)
-  dev.off()
+  if (length(sample_coverage)>0){
+    print(paste("coverage", mean(sample_coverage)))
+    jpeg('pivots.jpg')
+    plot(ecdf(sample_pvalues), xlim=c(0,1),  main="Empirical CDF of null p-values", xlab="p-values", ylab="ecdf")
+    abline(0, 1, lty=2)
+    dev.off()
+  }
 }
 
 set.seed(1)

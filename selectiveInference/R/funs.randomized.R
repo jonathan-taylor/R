@@ -344,6 +344,9 @@ randomizedLassoInf = function(X,
                                parameter_stop=parameter_stop)
 
   active_set = lasso_soln$active_set
+  if (length(active_set)==0){
+    return (list(active_set=active_set, pvalues=c(), ci=c()))
+  }
   inactive_set = lasso_soln$inactive_set
   nactive = length(active_set)
 
@@ -379,28 +382,46 @@ randomizedLassoInf = function(X,
   pvalues = rep(0, nactive)
   ci = matrix(0, nactive, 2)
   for (i in 1:nactive){
+
     target_transform = linear_decomposition(observed_target[i], 
                                             observed_internal, 
                                             target_cov[i,i], 
                                             cov_target_internal[,i],
                                             internal_transform)
-    target_sample = rnorm(nrow(opt_samples)) * sqrt(target_cov[i,i])
     
+    target_opt_linear = cbind(target_transform$linear_term, opt_transform$linear_term)
+    reduced_target_opt_linear = chol(t(target_opt_linear) %*% target_opt_linear)
+    target_linear = reduced_target_opt_linear[,1]
+    temp = solve(t(reduced_target_opt_linear)) %*% t(target_opt_linear)
+    target_offset = temp %*% target_transform$offset_term
+    target_transform = list(linear_term = as.matrix(target_linear), offset_term = target_offset)
+    print(dim(reduced_target_opt_linear))
+    opt_linear = reduced_target_opt_linear[,2:ncol(reduced_target_opt_linear)]
+    opt_offset = temp %*% opt_transform$offset_term
+    opt_transform_reduced = list(linear_term = as.matrix(opt_linear), offset_term = opt_offset)
+    
+    raw = target_transform$linear_term * observed_target[i] +target_transform$offset_term
+    
+    target_sample = rnorm(nrow(as.matrix(opt_samples))) * sqrt(target_cov[i,i])
     pivot = function(candidate){
-      weights = importance_weight(noise_scale,
-                                  t(as.matrix(target_sample) + candidate),
-                                  t(opt_samples),
-                                  opt_transform,
-                                  target_transform,
-                                  observed_raw)
-      return(mean((target_sample + candidate < observed_target[i]) * weights)/mean(weights))
+
+      weights = selectiveInference:::importance_weight(noise_scale,
+                                                     t(as.matrix(target_sample)) + candidate,
+                                                     t(opt_samples),
+                                                     opt_transform_reduced,
+                                                     target_transform,
+                                                     raw)
+      return(mean((target_sample+candidate<observed_target[i])*weights)/mean(weights))
     }
+    
     rootU = function(candidate){
       return (pivot(observed_target[i]+candidate)-(1-level)/2)
     }
+    
     rootL = function(candidate){
       return (pivot(observed_target[i]+candidate)-(1+level)/2)
     }
+    
     pvalues[i] = pivot(0)
     line_min = -20*sd(target_sample)
     line_max = 20*sd(target_sample)
