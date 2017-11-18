@@ -106,13 +106,12 @@ collect_results = function(n,p,s, nsim=100, level=0.9,
                                                            family=family)
 
     result = selectiveInference:::randomizedLassoInf(rand_lasso_soln,
-                                                     sampler = "adaptMCMC", #"norejection", #
+                                                     sampler = "norejection", #"adaptMCMC", #
                                                      level=level, 
                                                      burnin=1000, 
-                                                     nsample=5000, 
-                                                     condition_subgrad=condition_subgrad)
-    if (length(result$active_set)>0){
-      true_beta = data$beta[result$active_set]
+                                                     nsample=5000)
+    if (length(result$pvalues)>0){
+      true_beta = data$beta[rand_lasso_soln$active_set]
       coverage = rep(0, nrow(result$ci))
       for (i in 1:nrow(result$ci)){
         if (result$ci[i,1]<true_beta[i] & result$ci[i,2]>true_beta[i]){
@@ -135,5 +134,5 @@ collect_results = function(n,p,s, nsim=100, level=0.9,
 }
 
 set.seed(1)
-collect_results(n=500, p=200, s=0, lam=1.)
+collect_results(n=100, p=20, s=0, lam=1.)
 
