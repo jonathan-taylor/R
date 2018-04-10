@@ -15,8 +15,8 @@ outfile = file.path(outdir, paste(sep="",label, ".rds"))
 set.seed(1)
 loss="ls"
 sigma_est = 0.4814
-lambda =  0.02735951
-#lambda =  0.8*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
+# lambda =  0.02735951 #lambda =  0.8*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
+lambda = 0.02393957 #lambda =  0.7*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
 #print(c("lambda", lambda))
 
 
@@ -39,8 +39,12 @@ liu_full = function(outfile){
 
 
 
-lee_full = function(outfile){
-  data=readRDS("real_data2.rds")
+lee = function(outfile, type){
+  if (type=="full"){
+    data=readRDS("real_data2.rds")
+  } else if (type=="partial"){
+    data=readRDS("real_data3.rds")
+  }
   X=data$X
   y=data$y
   n=nrow(X)
@@ -48,7 +52,7 @@ lee_full = function(outfile){
   lasso = glmnet(X, y, family=selectiveInference:::family_label(loss), alpha=1, standardize=FALSE, intercept=FALSE, thresh=1e-12)
   soln = as.numeric(coef(lasso,x=X,y=y, family=selectiveInference:::family_label(loss), s=lambda, exact=TRUE))[-1]
   PVS = selectiveInference:::fixedLassoInf(X,y,soln, intercept=FALSE, lambda*n, family=selectiveInference:::family_label(loss),
-                                           type="full",sigma=sigma_est)
+                                           type=type,sigma=sigma_est)
   
   abs_soln = abs(soln)
   beta_threshold = abs_soln[order(abs_soln,decreasing=TRUE)][length(PVS$pv)]
@@ -66,9 +70,9 @@ lee_full = function(outfile){
 
 knockoff = function(method, outfile){
   if (method=="knockoff"){
-    data=readRDS("real_data3.rds")
-  } else if (method=="knockoff+"){
     data=readRDS("real_data4.rds")
+  } else if (method=="knockoff+"){
+    data=readRDS("real_data5.rds")
   }
   
   X=data$X
@@ -85,9 +89,9 @@ knockoff = function(method, outfile){
 
 randomized = function(type, outfile){
   if (type=="full"){
-    data=readRDS("real_data5.rds")
-  } else if (type=="partial"){
     data=readRDS("real_data6.rds")
+  } else if (type=="partial"){
+    data=readRDS("real_data7.rds")
   }
   
   X=data$X
@@ -119,8 +123,10 @@ randomized = function(type, outfile){
 
 if (method=="liu"){
   liu_full(outfile)
-} else if (method=="lee"){
-  lee_full(outfile)
+} else if (method=="lee_full"){
+  lee(outfile, type="full")
+} else if (method="lee_partial"){
+  lee(outfile, type="partial")
 } else if (method=="knockoff"){
   knockoff(method, outfile)
 } else if (method=="knockoff+"){
