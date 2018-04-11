@@ -16,7 +16,8 @@ set.seed(1)
 loss="ls"
 sigma_est = 0.4814
 # lambda =  0.02735951 #lambda =  0.8*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
-lambda = 0.02393957 #lambda =  0.7*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
+# lambda = 0.02393957 #lambda =  0.7*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
+lambda = 0.02564954 # lambda = 0.75 * theory 
 #print(c("lambda", lambda))
 
 
@@ -125,7 +126,7 @@ if (method=="liu"){
   liu_full(outfile)
 } else if (method=="lee_full"){
   lee(outfile, type="full")
-} else if (method="lee_partial"){
+} else if (method=="lee_partial"){
   lee(outfile, type="partial")
 } else if (method=="knockoff"){
   knockoff(method, outfile)
