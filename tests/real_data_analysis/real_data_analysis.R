@@ -3,15 +3,21 @@ library(selectiveInference)
 library(MASS)
 library(knockoff)
 
-setwd(getwd())
-args = commandArgs(trailingOnly=TRUE)
-method = toString(args[1])
+cluster=TRUE
 
-outdir = "/scratch/users/jelenam/full/"
-label = paste(method, "_real_data_results", sep="")
-outfile = file.path(outdir, paste(sep="",label, ".rds"))
+if (cluster==TRUE){
+  setwd(getwd())
+  args = commandArgs(trailingOnly=TRUE)
+  method = toString(args[1])
+  outdir = "/scratch/users/jelenam/full/"
+  label = paste(method, "_real_data_results", sep="")
+  outfile = file.path(outdir, paste(sep="",label, ".rds"))
+} else{
+  setwd("/Users/Jelena/Dropbox/kevin/jelena/crohns")
+  method="liu"
+  outfile="liu_real_data_results.rds"
+}
 
-#setwd("/Users/Jelena/Dropbox/kevin/jelena/real_data")
 set.seed(1)
 loss="ls"
 sigma_est = 0.4753636
@@ -19,15 +25,27 @@ lambda = 0.02701314
 
 
 liu_full = function(outfile){
-  data=readRDS("real_data1.rds")
+  if (cluster==TRUE){
+    data=readRDS("real_data1.rds")
+  } else{
+    data=readRDS("real_data.rds")
+  }
   X=data$X
   y=data$y
   n=nrow(X)
+  X=scale(X)
+  y=y-mean(y)
+  
   penalty_factor = rep(1, ncol(X))
   
   soln = selectiveInference:::solve_problem_glmnet(X, y, lambda, penalty_factor=penalty_factor, loss=loss)
   PVS = selectiveInference:::inference_debiased_full(X, y, soln, lambda=lambda, penalty_factor=penalty_factor, 
-                                                 sigma_est, loss=loss, algo="glmnet", construct_ci = TRUE)
+                                                 sigma_est, loss=loss, algo="glmnet", construct_ci = TRUE,
+                                                 verbose=TRUE)
+  
+  cat("nactive:", length(PVS$active_vars), "\n")
+  cat("active vars:", PVS$active_vars, "\n")
+  
   saveRDS(list(active_vars=PVS$active_vars, 
                sel_intervals=PVS$sel_intervals, naive_intervals=PVS$naive_intervals,
                pvalues=PVS$pvalues, naive_pvalues=PVS$naive_pvalues), file=outfile)
@@ -46,7 +64,9 @@ lee = function(outfile, type){
   X=data$X
   y=data$y
   n=nrow(X)
-
+  X=scale(X)
+  y=y-mean(y)
+  
   lasso = glmnet(X, y, family=selectiveInference:::family_label(loss), alpha=1, standardize=FALSE, intercept=FALSE, thresh=1e-12)
   soln = as.numeric(coef(lasso,x=X,y=y, family=selectiveInference:::family_label(loss), s=lambda, exact=TRUE))[-1]
   PVS = selectiveInference:::fixedLassoInf(X,y,soln, intercept=FALSE, lambda*n, family=selectiveInference:::family_label(loss),
