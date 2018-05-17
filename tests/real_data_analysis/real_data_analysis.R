@@ -14,11 +14,8 @@ outfile = file.path(outdir, paste(sep="",label, ".rds"))
 #setwd("/Users/Jelena/Dropbox/kevin/jelena/real_data")
 set.seed(1)
 loss="ls"
-sigma_est = 0.4814
-# lambda =  0.02735951 #lambda =  0.8*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
-lambda = 0.02393957 #lambda =  0.7*selectiveInference:::theoretical.lambda(X, loss, sigma_est)
-#lambda = 0.02564954 # lambda = 0.75 * theory 
-#print(c("lambda", lambda))
+sigma_est = 0.4753636
+lambda = 0.02701314
 
 
 liu_full = function(outfile){
@@ -29,7 +26,7 @@ liu_full = function(outfile){
   penalty_factor = rep(1, ncol(X))
   
   soln = selectiveInference:::solve_problem_glmnet(X, y, lambda, penalty_factor=penalty_factor, loss=loss)
-  PVS = selectiveInference:::inference_group_lasso(X, y, soln, groups=1:ncol(X), lambda=lambda, penalty_factor=penalty_factor, 
+  PVS = selectiveInference:::inference_debiased_full(X, y, soln, lambda=lambda, penalty_factor=penalty_factor, 
                                                  sigma_est, loss=loss, algo="glmnet", construct_ci = TRUE)
   saveRDS(list(active_vars=PVS$active_vars, 
                sel_intervals=PVS$sel_intervals, naive_intervals=PVS$naive_intervals,
@@ -89,6 +86,7 @@ knockoff = function(method, outfile){
 
 
 randomized = function(type, outfile){
+  
   if (type=="full"){
     data=readRDS("real_data4.rds")
   } else if (type=="partial"){
@@ -105,10 +103,10 @@ randomized = function(type, outfile){
                                                          family=selectiveInference:::family_label(loss),
                                                          condition_subgrad=TRUE)
   
-  full_targets=selectiveInference:::set.target(rand_lasso_soln, type=type, sigma_est=sigma_est)
+  full_targets=selectiveInference:::compute_target(rand_lasso_soln, type=type, sigma_est=sigma_est)
   
   PVS = selectiveInference:::randomizedLassoInf(rand_lasso_soln,
-                                                full_targets=full_targets,
+                                                targets=full_targets,
                                                 sampler = "norejection", #"adaptMCMC", #
                                                 level=0.9, 
                                                 burnin=1000, 
