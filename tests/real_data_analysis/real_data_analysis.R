@@ -3,7 +3,7 @@ library(selectiveInference)
 library(MASS)
 library(knockoff)
 
-cluster=TRUE
+cluster=FALSE
 
 if (cluster==TRUE){
   setwd(getwd())
@@ -40,7 +40,7 @@ liu_full = function(outfile){
   
   soln = selectiveInference:::solve_problem_glmnet(X, y, lambda, penalty_factor=penalty_factor, loss=loss)
   PVS = selectiveInference:::inference_debiased_full(X, y, soln, lambda=lambda, penalty_factor=penalty_factor, 
-                                                 sigma_est, loss=loss, algo="glmnet", construct_ci = TRUE,
+                                                 sigma_est, loss=loss, algo="Q", construct_ci = TRUE,
                                                  verbose=TRUE)
   
   cat("nactive:", length(PVS$active_vars), "\n")
