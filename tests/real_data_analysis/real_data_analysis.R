@@ -3,7 +3,7 @@ library(selectiveInference)
 library(MASS)
 library(knockoff)
 
-cluster=FALSE
+cluster=TRUE
 
 if (cluster==TRUE){
   setwd(getwd())
