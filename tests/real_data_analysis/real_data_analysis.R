@@ -21,7 +21,7 @@ if (cluster==TRUE){
 set.seed(1)
 loss="ls"
 sigma_est = 0.4753636
-lambda =  0.02532482 #0.0236365 #0.02701314
+lambda = 0.02701314
 
 
 liu_full = function(outfile){
