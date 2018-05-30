@@ -108,14 +108,14 @@ collect_results = function(n,p,s, nsim=100, level=0.9,
                                                            family=family,
                                                            condition_subgrad=condition_subgrad)
     
-    full_targets=selectiveInference:::set.target(rand_lasso_soln,type=type)
+    targets=selectiveInference:::set.targets(rand_lasso_soln,type=type)
     
     result = selectiveInference:::randomizedLassoInf(rand_lasso_soln,
-                                                     full_targets=full_targets,
-                                                     sampler = "norejection", #"adaptMCMC", #
+                                                     targets=targets,
+                                                     sampler = "restrictedMVN", # "norejection", # "restrictedMVN", #"adaptMCMC", #
                                                      level=level, 
-                                                     burnin=1000, 
-                                                     nsample=5000)
+                                                     burnin=2000, 
+                                                     nsample=10000)
     if (length(result$pvalues)>0){
       true_beta = data$beta[rand_lasso_soln$active_set]
       coverage = rep(0, nrow(result$ci))

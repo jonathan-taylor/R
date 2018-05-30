@@ -113,7 +113,6 @@ randomizedLasso = function(X,
     observed_unpen = result$soln[unpenalized]
     observed_subgrad = -n*result$gradient[inactive]
     
-    print(c("nactive", length(active_set)))
     if (sum(abs(observed_subgrad)>lam[inactive]*(1.001)) > 0){
       stop("subgradient eq not satisfied")
     }
@@ -280,7 +279,7 @@ randomizedLasso = function(X,
                 sign_soln=sign_soln,
                 law=law,
                 internal_transform=internal_transform,
-		            observed_internal=observed_internal,
+		observed_internal=observed_internal,
                 observed_raw=observed_raw,
                 noise_scale=noise_scale,
                 soln=result$soln,
@@ -299,30 +298,7 @@ sample_opt_variables = function(law, jump_scale, nsample=10000) {
                   scale=jump_scale))
 }
 
-# Carry out a linear decompositon of an internal
-# representation with respect to a target
-
-# Returns an affine transform into raw coordinates (i.e. \omega or randomization coordinates)
-
-linear_decomposition = function(observed_target,
-                                observed_internal,
-                                var_target,
-                                cov_target_internal,
-                                internal_transform) {
-    var_target = as.matrix(var_target) 
-    if (nrow(var_target) == 1) {
-        nuisance = observed_internal - cov_target_internal * observed_target / var_target
-        target_linear = internal_transform$linear_term %*% cov_target_internal / var_target[1,1]
-    } else {
-        nuisance = observed_internal - cov_target_internal %*% solve(var_target) %*% observed_target 
-        target_linear = internal_transform$linear_term %*% cov_target_internal %*% solve(var_target)
-    }
-    target_offset = internal_transform$linear_term %*% nuisance + internal_transform$offset_term
-    return(list(linear_term=target_linear,
-                offset_term=target_offset))
-}
-
-# XXX only for Gaussian so far
+# Gaussian importance_weight
 
 importance_weight = function(noise_scale,
                              target_sample,
@@ -410,7 +386,7 @@ conditional_opt_transform = function(noise_scale,
 	      cond_mean=cond_mean))
 }
 
-set.target = function(rand_lasso_soln, 
+set.targets = function(rand_lasso_soln, 
                       type, 
                       construct_pvalues=NULL,
                       construct_ci=NULL){
@@ -421,10 +397,11 @@ set.target = function(rand_lasso_soln,
   p=ncol(X); n=nrow(X);
   active_set = rand_lasso_soln$active_set
   unpenalized_set = rand_lasso_soln$unpenalized_set
-  nactive = length(c(active_set, unpenalized_set))
   inactive_set = rand_lasso_soln$inactive_set
-  
-  X_E = rand_lasso_soln$X[, c(active_set, unpenalized_set), drop=FALSE]
+  overall_set = c(active_set, unpenalized_set)
+  nactive = length(overall_set)
+
+  X_E = rand_lasso_soln$X[, overall_set, drop=FALSE]
   
   if (rand_lasso_soln$family == 'gaussian') {
     glm_y = glm(y ~ X_E-1)
@@ -438,12 +415,17 @@ set.target = function(rand_lasso_soln,
     cov_target = vcov(glm_y)
     
     if (sum(is.na(observed_target)) > 0) {
-      stop("unregularized (relaxed) fit has NA values -- X[,active_set] likely singular")
+      stop("unregularized (relaxed) fit has NA values -- X[,overall_set] likely singular")
     }
     
-    crosscov_target_internal=rbind(cov_target, matrix(0, nrow=p-nactive, ncol=nactive))
+    crosscov_target = rbind(cov_target, matrix(0, nrow=p-nactive, ncol=nactive))
   } 
   
+  alternative = rep(NA, length(overall_set))
+  for (i in 1:length(active_set)) {  # make the unpenalized (last entries) be NA
+       alternative[i] = rand_lasso_soln$sign_soln[overall_set[i]]
+  }
+
   if (type=="full"){
     
     lasso.est = rand_lasso_soln$soln
@@ -478,20 +460,12 @@ set.target = function(rand_lasso_soln,
       M_active = pseudo_invX[active_set,] %*% t(X)
       M_inactive = (pseudo_invX[,inactive_set] %*% t(X_inactive))[active_set,]
     }
-    #print(c("M_active size", dim(M_active)))
-    #print(c("M_inactive size", dim(M_inactive)))
-    #print(M_inactive[,1:10])
-    #pseudo_invX = pinv(crossprod(X))
-    #M_inactive = (pseudo_invX[,inactive_set] %*% t(X_inactive))[active_set,]
-    #print(M_inactive[,1:10])
-    
-    #print(c("M_active size", dim(M_active)))
-    #print(c("M_inactive size", dim(M_inactive)))
-    residuals = y-X%*%lasso.est
-    scalar = 1 #sqrt(n)
-    observed_target = lasso.est[active_set]+scalar*M_active %*% residuals
-    cov_target = vcov(glm_y) + scalar^2*M_inactive %*% t(M_inactive)
-    crosscov_target_internal = rbind(vcov(glm_y), scalar*t(X_inactive) %*% t(M_inactive))
+
+    residuals = y - X%*%lasso.est
+    observed_target = lasso.est[active_set] + M_active %*% residuals
+    cov_target = vcov(glm_y) + M_inactive %*% t(M_inactive)
+    cov_target = vcov(glm(y ~ X-1))[active_set,][,active_set] 
+    crosscov_target = rbind(vcov(glm_y), t(X_inactive) %*% t(M_inactive))
     
   }
   
@@ -501,9 +475,9 @@ set.target = function(rand_lasso_soln,
     names(observed_target) = active_set
   }
   
-  targets = list(observed_target=observed_target,
-                 cov_target=cov_target,
-                 crosscov_target_internal=crosscov_target_internal)
+  target_data = list(observed_target=observed_target,
+                     cov_target=cov_target,
+                     crosscov_target=crosscov_target)
   
   if (is.null(construct_ci)){
     construct_ci=rep(1,nactive)
@@ -513,19 +487,18 @@ set.target = function(rand_lasso_soln,
   }
   
   
-  return(list(targets=targets,
+  return(list(target_data=target_data,
               construct_ci=construct_ci, 
-              construct_pvalues=construct_pvalues))
+              construct_pvalues=construct_pvalues,
+	      alternative=alternative))
 }
 
-
 randomizedLassoInf = function(rand_lasso_soln,
-                              full_targets=NULL,
+                              targets=NULL,
                               level=0.9,
-                              sampler=c("norejection", "adaptMCMC"),
+                              sampler=c("norejection", "adaptMCMC", "restrictedMVN"),
                               nsample=10000,
-                              burnin=2000,
-                              alternative = c("two-sided", "greated", "less"))
+                              burnin=2000)
  {
 
   n = nrow(rand_lasso_soln$X)
@@ -558,16 +531,29 @@ randomizedLassoInf = function(rand_lasso_soln,
                                    law$sampling_transform$offset_term,
                                    law$constraints,
                                    nsamples=nsample,
-		                               burnin=burnin)
+                                   burnin=burnin)
+  } else if (sampler == "restrictedMVN") {
+    if (rand_lasso_soln$condition_subgrad == TRUE) {
+       q = length(law$observed_opt_state)
+       opt_samples = sample_from_constraints(linear_part=-diag(q),
+                                             offset=rep(0, q),
+					     mean=law$cond_mean,
+					     covariance=law$cond_cov,
+					     ndraw=nsample,
+					     burnin=burnin,
+					     initial_point=law$observed_opt_state)
+    } else {
+       stop("restrictedMVN sampler only implemented when conditioning on subgradient")
+    }
   }
 
-  if (is.null(full_targets)){
-    full_targets=set.target(rand_lasso_soln, type="partial")
+  if (is.null(targets)){
+    targets=set.targets(rand_lasso_soln, type="partial")
   }
   
-  targets=full_targets$targets
-  construct_ci=full_targets$construct_ci
-  construct_pvalues = full_targets$construct_pvalues
+  target_data = targets$target_data
+  construct_ci = targets$construct_ci
+  construct_pvalues = targets$construct_pvalues
   
   observed_internal = rand_lasso_soln$observed_internal
   
@@ -578,18 +564,23 @@ randomizedLassoInf = function(rand_lasso_soln,
   pvalues = rep(0, nactive)
   ci = matrix(0, nactive, 2)
   
-  names(pvalues) = names(targets$observed_target)
-  rownames(ci) = names(targets$observed_target)
+  names(pvalues) = names(target_data$observed_target)
+  rownames(ci) = names(target_data$observed_target)
+
+  #print(dim(internal_transform$linear_term))
+  #print(dim(target_data$crosscov_target))
+  #V = internal_transform$linear_term %*% target_data$crosscov_target[1:nactive,]
+  #print(V)
 
   for (i in 1:nactive){
-    pre_nuisance = observed_internal - (as.vector(targets$crosscov_target_internal[,i]) *
-                                        targets$observed_target[i] / 
-                                        targets$cov_target[i,i])
+    pre_nuisance = observed_internal - (as.vector(target_data$crosscov_target[,i]) *
+                                        target_data$observed_target[i] / 
+                                        target_data$cov_target[i,i])
     
     nuisance = internal_transform$linear_term %*% pre_nuisance[1:nactive] 
     nuisance[inactive_set] = nuisance[inactive_set] - pre_nuisance[(nactive+1):p]
 
-    pre_linear_term = targets$crosscov_target_internal[,i] / targets$cov_target[i,i]
+    pre_linear_term = target_data$crosscov_target[,i] / target_data$cov_target[i,i]
     linear_term = rep(0, p)
     linear_term = internal_transform$linear_term %*% pre_linear_term[1:nactive]
     linear_term[inactive_set] = linear_term[inactive_set] - pre_linear_term[(nactive+1):p]
@@ -598,7 +589,7 @@ randomizedLassoInf = function(rand_lasso_soln,
     
     # compute sufficient statistic for root finding
 
-    target_sample = rnorm(nrow(as.matrix(opt_samples))) * sqrt(targets$cov_target[i,i])
+    target_sample = rnorm(nrow(as.matrix(opt_samples))) * sqrt(target_data$cov_target[i,i])
 
     # weight in the numerator is of the form
     # -1/(2 noise_scale^2)\|Do + q + P(t+\theta)\|^2_2 
@@ -635,59 +626,49 @@ randomizedLassoInf = function(rand_lasso_soln,
                                           observed_raw)
     log_reference_measure = log(reference_measure)	       
 
-#     alternative_measure = importance_weight(noise_scale,
-#                                             t(as.matrix(target_sample) + 0.1 * sqrt(targets$cov_target[i,i])),
-#                                             t(opt_samples),
-#                                             importance_transform,
-#                                             target_transform,
-#                                             observed_raw)
-
-
-#     sufficient_stat = (log(alternative_measure) - log_reference_measure) / (0.1 * sqrt(targets$cov_target[i,i]))
-
     pivot = function(candidate){
       arg_ = candidate * sufficient_stat + log_reference_measure
       arg_ = arg_ - max(arg_)
       weights = exp(arg_)
-      p = mean((target_sample + candidate < targets$observed_target[i]) * weights)/mean(weights)
+      p = mean((target_sample + candidate < target_data$observed_target[i]) * weights)/mean(weights)
       return(p)
     }
 
     rootU = function(candidate){
-      return (pivot(targets$observed_target[i]+candidate)-(1-level)/2)
+      return (pivot(target_data$observed_target[i]+candidate)-(1-level)/2)
     }
 
     rootL = function(candidate){
-      return(pivot(targets$observed_target[i]+candidate)-(1+level)/2)
+      return(pivot(target_data$observed_target[i]+candidate)-(1+level)/2)
     }
     
     if (construct_pvalues[i]==1){
       pvalues[i] = pivot(0)
-      if (alternative=="two-sided"){
+      if (is.na(targets$alternative[i])){
         pvalues[i] = 2*min(pvalues[i], 1-pvalues[i])
-      } else if (alternative=="greater"){
+      } else if (targets$alternative[i] == 1){
         pvalues[i]= 1-pvalues[i]
       } 
     }
     
     if (construct_ci[i]==1){
       
-      line_min = -10*sd(target_sample) + targets$observed_target[i]
-      line_max = 10*sd(target_sample) + targets$observed_target[i]
+      line_min = -10*sd(target_sample) + target_data$observed_target[i]
+      line_max = 10*sd(target_sample) + target_data$observed_target[i]
     
       if (rootU(line_min)*rootU(line_max)<0){
-        ci[i,2] = uniroot(rootU, c(line_min, line_max))$root + targets$observed_target[i]
+        ci[i,2] = uniroot(rootU, c(line_min, line_max))$root + target_data$observed_target[i]
       } else{
         ci[i,2]=line_max
       }
       if (rootL(line_min)*rootL(line_max)<0){
-        ci[i,1] = uniroot(rootL, c(line_min, line_max))$root + targets$observed_target[i]
+        ci[i,1] = uniroot(rootL, c(line_min, line_max))$root + target_data$observed_target[i]
       } else{
         ci[i,1] = line_min
       }
     }
   }
-  return(list(full_targets=full_targets, pvalues=pvalues, ci=ci))
+  return(list(targets=target_data, pvalues=pvalues, ci=ci))
 }
 
 logistic_fitted = function(X, beta){
