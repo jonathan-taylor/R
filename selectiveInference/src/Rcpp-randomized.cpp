@@ -1,6 +1,7 @@
 #include <Rcpp.h>                // need to include the main Rcpp header file 
 #include <randomized_lasso.h>    // where densities are defined
-#include <stdio.h>
+#include <selective_mle.h>       // where barrier_solve is defined
+
 // [[Rcpp::export]]
 Rcpp::NumericVector log_density_gaussian_(double noise_scale,                         // Scale of randomization
 					  Rcpp::NumericMatrix internal_linear,        // A_D -- linear part for data
@@ -53,7 +54,6 @@ Rcpp::NumericVector log_density_gaussian_conditional_(double noise_scale,       
 
   int ipt;
   for (ipt=0; ipt<npt; ipt++) {
-    // fprintf(stderr, "here 5: %f %d %d %d %d\n", noise_scale, ndim, noptimization, ipt, npt);
     result[ipt] = log_density_gaussian_conditional(noise_scale,
 						   ndim,
 						   noptimization,
@@ -126,4 +126,46 @@ Rcpp::NumericVector log_density_laplace_conditional_(double noise_scale,        
   }
 
   return(result);
+}
+
+// [[Rcpp::export]]
+Rcpp::List solve_barrier_(Rcpp::NumericVector conjugate_arg,     // Argument to conjugate
+			  Rcpp::NumericMatrix precision,         // Precision matrix in conjugate optimization problem
+			  Rcpp::NumericVector feasible_point,    // Feasible point -- must be nonnegative
+			  int max_iter,                          // How many iterations to run
+			  int min_iter,                          // Minimum iterations to run
+			  double value_tol,                      // Tolerance for convergence
+			  double initial_step) {                 // Initial step size
+
+  int ndim = precision.ncol();
+  int idim;
+
+  Rcpp::NumericVector gradient(ndim);
+  Rcpp::NumericVector opt_variable(ndim);
+  Rcpp::NumericVector opt_proposed(ndim);
+  Rcpp::NumericVector scaling(ndim);
+
+  double *scaling_ptr = scaling.begin();
+  double *opt_ptr = opt_variable.begin();
+
+  for (idim=0; idim<ndim; idim++) {
+    *scaling_ptr = precision(idim, idim); scaling_ptr++;
+    *opt_ptr = feasible_point(idim); opt_ptr++;
+  }
+
+  double value = barrier_solve((double *) gradient.begin(),                   
+			       (double *) opt_variable.begin(),               
+			       (double *) opt_proposed.begin(),               
+			       (double *) conjugate_arg.begin(),              
+			       (double *) precision.begin(),                  
+			       (double *) scaling.begin(),                    
+			       ndim,                                          
+			       max_iter,                                      
+			       min_iter,                                      
+			       value_tol,                                     
+			       initial_step);                                 
+
+  return(Rcpp::List::create(Rcpp::Named("soln") = opt_variable,
+			    Rcpp::Named("value") = value,
+			    Rcpp::Named("gradient") = gradient));
 }

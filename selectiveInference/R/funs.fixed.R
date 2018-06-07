@@ -22,10 +22,21 @@ fixedLassoInf <- function(x, y, beta,
   this.call = match.call()
   type = match.arg(type)
   
+  type = match.arg(type)
   if(family=="binomial")  {
-    if(type!="partial") stop("Only type= partial allowed with binomial family")
-    out=fixedLogitLassoInf(x,y,beta,lambda,alpha=alpha, type="partial", tol.beta=tol.beta, tol.kkt=tol.kkt,
-                           gridrange=gridrange, bits=bits, verbose=verbose,this.call=this.call)
+    out=fixedLogitLassoInf(x,
+                           y,
+                           beta,
+                           lambda,
+                           alpha=alpha, 
+                           type=type, 
+                           tol.beta=tol.beta, 
+                           tol.kkt=tol.kkt,
+                           gridrange=gridrange, 
+                           bits=bits, 
+                           verbose=verbose,
+                           linesearch.try=linesearch.try,
+                           this.call=this.call)
     return(out)
   }
   else if(family=="cox")  {
@@ -189,10 +200,22 @@ fixedLassoInf <- function(x, y, beta,
       # Approximate inverse covariance matrix for when (n < p) from lasso_Inference.R
       if (!is_wide) {
            hsigma = 1/n*(t(Xordered)%*%Xordered)
-           htheta = debiasingMatrix(hsigma, is_wide, n, 1:length(S), verbose=FALSE, max_try=linesearch.try, warn_kkt=TRUE)
+           htheta = debiasingMatrix(hsigma, 
+                                    is_wide, 
+                                    n, 
+                                    1:length(S), 
+                                    verbose=FALSE, 
+                                    max_try=linesearch.try, 
+                                    warn_kkt=TRUE)
            ithetasigma = (GS-(htheta%*%hsigma))
       } else {
-           htheta = debiasingMatrix(Xordered, is_wide, n, 1:length(S), verbose=FALSE, max_try=linesearch.try, warn_kkt=TRUE)
+           htheta = debiasingMatrix(Xordered, 
+                                    is_wide, 
+                                    n, 
+                                    1:length(S), 
+                                    verbose=FALSE, 
+                                    max_try=linesearch.try, 
+                                    warn_kkt=TRUE)
            ithetasigma = (GS-((htheta%*%t(Xordered)) %*% Xordered)/n)
       }
 
@@ -229,9 +252,11 @@ fixedLassoInf <- function(x, y, beta,
     limits.info = TG.limits(y, A, b, vj, Sigma=diag(rep(sigma^2, n)))
     a = TG.pvalue.base(limits.info, null_value=null_value[j], bits=bits)
     pv[j] = a$pv
+    
     if (is.na(sign_vars[j])) { # for variables not in the active set, report 2-sided pvalue
        pv[j] = 2 * min(pv[j], 1 - pv[j])
     }
+    
     vlo[j] = a$vlo * mj # Unstandardize (mult by norm of vj)
     vup[j] = a$vup * mj # Unstandardize (mult by norm of vj)
     if (!is.na(sign_vars[j])) { 
@@ -322,12 +347,14 @@ fixedLassoPoly =
 ## Approximates inverse covariance matrix theta
 ## using coordinate descent 
 
-debiasingMatrix = function(Xinfo,               # could be X or t(X) %*% X / n depending on is_wide
+debiasingMatrix = function(Xinfo,               # could be X or t(X) %*% X / n 
+                                                # depending on is_wide
+
                            is_wide,
                            nsample, 
                            rows, 
                            verbose=FALSE, 
-                           bound=NULL,             # starting value of bound
+                           bound=NULL,          # starting value of bound
                            linesearch=TRUE,     # do a linesearch?
                            scaling_factor=1.5,  # multiplicative factor for linesearch
                            max_active=NULL,     # how big can active set get?
@@ -364,7 +391,8 @@ debiasingMatrix = function(Xinfo,               # could be X or t(X) %*% X / n d
         print(paste(xperc,"% done",sep="")); }
     }
 
-    output = debiasingRow(Xinfo,               # could be X or t(X) %*% X / n depending on is_wide
+    output = debiasingRow(Xinfo,               # could be X or t(X) %*% X / n 
+                                               # depending on is_wide
                           is_wide,
                           row,
                           bound,
