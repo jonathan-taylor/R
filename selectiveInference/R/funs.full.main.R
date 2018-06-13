@@ -296,27 +296,15 @@ approximate_JM = function(X, active_set){
   nactive=length(active_set)
   inactive_set=setdiff(1:p, active_set)
   X_active = X[, active_set]
-  #X_inactive = X[, inactive_set]
-  #Xordered = X[,c(active_set,inactive_set,recursive=T)]
-  #hsigmaS = 1/n*(t(X_active)%*%X_active) # hsigma[S,S]
-  #hsigmaSinv =  ginv(hsigmaS) # generalized inverse solve(hsigmaS) # ginv
-  #FS = rbind(diag(nactive),matrix(0,p-nactive,nactive))
-  #GS = cbind(diag(nactive),matrix(0,nactive,p-nactive))
   
   is_wide = n < (2 * p)
 
   if (!is_wide) {
-    #hsigma = 1/n*(t(Xordered)%*%Xordered)
-    #htheta = selectiveInference:::debiasingMatrix(hsigma, is_wide, n, 1:nactive)  ## approximate inverse of $X^TX/n$
-    #ithetasigma = (GS-(htheta%*%hsigma))
     hsigma = 1/n*(t(X)%*%X)
     htheta = selectiveInference:::debiasingMatrix(hsigma, is_wide, n, active_set)
   } else {
-    #htheta = selectiveInference:::debiasingMatrix(Xordered, is_wide, n, 1:nactive)
-    #ithetasigma = (GS-((htheta%*%t(Xordered)) %*% Xordered)/n)
     htheta = selectiveInference:::debiasingMatrix(X, is_wide, n, active_set)
   }
-  #M_active <- ((htheta%*%t(Xordered))+ithetasigma%*%FS%*%hsigmaSinv%*%t(X_active))/n
   M_active = htheta%*%t(X)/n
   return(M_active)
 }
