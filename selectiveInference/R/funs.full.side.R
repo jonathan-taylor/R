@@ -11,10 +11,11 @@ estimate_sigma_data_spliting  = function(X,y, verbose=FALSE){
     CV = cv.glmnet(X[subsample,], y[subsample], standardize=FALSE, intercept=FALSE, family="gaussian")
     beta_hat = coef(CV, s="lambda.min")[-1]
     selected = which(beta_hat!=0)
+    nselected = length(selected)
     if (verbose){
-      print(c("nselected",length(selected)))
+      print(c("nselected",nselected))
     }
-    if (length(selected)>0){
+    if ((nselected>0) & (nselected<length(leftover))){
       LM = lm(y[leftover]~X[leftover,][,selected])
       sigma_est = sigma_est+sigma(LM)
       nest = nest+1

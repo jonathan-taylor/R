@@ -35,7 +35,7 @@ test_lee = function(seed=1, outfile=NULL, type="full", loss="ls", lambda_frac=0.
     #CV = cv.glmnet(X, y, standardize=FALSE, intercept=FALSE, family=selectiveInference:::family_label(loss))
     #sigma_est=selectiveInference:::estimate_sigma(X,y,coef(CV, s="lambda.min")[-1])  # sigma via Reid et al.
     #sigma_est=1
-    sigma_est = selectiveInference:::estimate_sigma_data_spliting(X,y)
+    sigma_est = selectiveInference:::estimate_sigma_data_spliting(X,y, verbose=TRUE)
     print(c("sigma est", sigma_est))
     
     # lambda = CV$lambda[which.min(CV$cvm+rnorm(length(CV$cvm))/sqrt(n))] # lambda via randomized cv 
@@ -45,7 +45,7 @@ test_lee = function(seed=1, outfile=NULL, type="full", loss="ls", lambda_frac=0.
     soln = as.numeric(coef(lasso,x=X,y=y, family=selectiveInference:::family_label(loss), s=lambda, exact=TRUE)[-1])
     
     PVS = selectiveInference:::fixedLassoInf(X,y,soln, intercept=FALSE, lambda*n, family=selectiveInference:::family_label(loss),
-                                             type=type, sigma=sigma_est)
+                                             type=type, sigma=sigma_est, debias_mat ="JM")
     
     abs_soln = abs(soln)
     beta_threshold = abs_soln[order(abs_soln,decreasing=TRUE)][length(PVS$pv)]

@@ -297,7 +297,6 @@ approximate_JM = function(X, active_set){
   inactive_set=setdiff(1:p, active_set)
   X_active = X[, active_set]
   #X_inactive = X[, inactive_set]
-  
   #Xordered = X[,c(active_set,inactive_set,recursive=T)]
   #hsigmaS = 1/n*(t(X_active)%*%X_active) # hsigma[S,S]
   #hsigmaSinv =  ginv(hsigmaS) # generalized inverse solve(hsigmaS) # ginv
@@ -322,12 +321,14 @@ approximate_JM = function(X, active_set){
   return(M_active)
 }
 
+## approximate inverse if n<p
+## returns approximate inverse of (X^TX)^{-1} times X^T
 approximate_BN = function(X, active_set){
   n=nrow(X)
   p=ncol(X)
   nactive=length(active_set)
   
-  inv = solve(X %*% t(X))
+  inv = solve(X %*% t(X))   ## full rank if n<p
   D = matrix(rep(0, nactive*p), nrow=nactive, ncol=p)
   for (i in 1:nactive){
     var = active_set[i]

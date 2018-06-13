@@ -8,7 +8,7 @@ fixedLassoInf <- function(x, y, beta,
                           sigma=NULL, alpha=0.1,
                           type=c("partial", "full"), tol.beta=1e-5, tol.kkt=0.1,
                           gridrange=c(-100,100), bits=NULL, verbose=FALSE, 
-                          linesearch.try=10) {
+                          linesearch.try=10, debias_mat = "JM") {
 
   family = match.arg(family)
   this.call = match.call()
@@ -151,6 +151,7 @@ fixedLassoInf <- function(x, y, beta,
     ci = tailarea = matrix(0,k,2)
       
     if (type=="full" & p > n) {
+      
       if (intercept == TRUE) {
         pp=p+1
         Xint <- cbind(rep(1,n),x)
@@ -161,50 +162,24 @@ fixedLassoInf <- function(x, y, beta,
         Xint <- x
         # indices of selected predictors
         S = vars
-        # notS = which(abs(beta) <= tol.coef)
       }
       
-      notS = setdiff(1:pp,S)
-      
-      XS = Xint[,S]
-      hbetaS = hbeta[S]
-      
-      # Reorder so that active set S is first
-      Xordered = Xint[,c(S,notS,recursive=T)]
-      hsigmaS = 1/n*(t(XS)%*%XS) # hsigma[S,S]
-      hsigmaSinv = solve(hsigmaS) # pinv(hsigmaS)
-      
-      FS = rbind(diag(length(S)),matrix(0,pp-length(S),length(S)))
-      GS = cbind(diag(length(S)),matrix(0,length(S),pp-length(S)))
-
-      is_wide = n < (2 * p) # somewhat arbitrary decision -- it is really for when we don't want to form with pxp matrices
-
-      # Approximate inverse covariance matrix for when (n < p) from lasso_Inference.R
-      if (!is_wide) {
-           hsigma = 1/n*(t(Xordered)%*%Xordered)
-           htheta = debiasingMatrix(hsigma, is_wide, n, 1:length(S), verbose=FALSE, max_try=linesearch.try, warn_kkt=TRUE)
-           ithetasigma = (GS-(htheta%*%hsigma))
-      } else {
-           htheta = debiasingMatrix(Xordered, is_wide, n, 1:length(S), verbose=FALSE, max_try=linesearch.try, warn_kkt=TRUE)
-           ithetasigma = (GS-((htheta%*%t(Xordered)) %*% Xordered)/n)
-      }
-
-      M <- (((htheta%*%t(Xordered))+ithetasigma%*%FS%*%hsigmaSinv%*%t(XS))/n)
-
-      # vector which is offset for testing debiased beta's
-      null_value <- (((ithetasigma%*%FS%*%hsigmaSinv)%*%sign(hbetaS))*lambda/n)
-
+      Mh = affine_approximate(Xint, hbeta, S, lambda=lambda, debias_mat=debias_mat, linesearch.try=linesearch.try)
+      M=Mh$M  ## |active_set| \times n
+      null_value = Mh$null_value ## vec of length |active_set|
+    
       if (intercept == T) {
         M = M[-1,] # remove intercept row
         null_value = null_value[-1] # remove intercept element
       }
-    } else if (type=="partial" || p > n) {
-      xa = x[,vars,drop=F]
-      M = pinv(crossprod(xa)) %*% t(xa)
-      null_value = rep(0,k)
-    } else {
+    } else if (type=="full"){
+      ## type = full and n>p
       M = pinv(crossprod(x)) %*% t(x)
       M = M[vars,,drop=F]
+      null_value = rep(0,k)
+    } else if (type=="partial") {
+      xa = x[,vars,drop=F]
+      M = pinv(crossprod(xa)) %*% t(xa)
       null_value = rep(0,k)
     }
 
@@ -240,7 +215,7 @@ fixedLassoInf <- function(x, y, beta,
     a = TG.interval.base(limits.info, 
                          alpha=alpha,
                          gridrange=gridrange,
-			 flip=(sign_vars[j]==-1),
+			                   flip=(sign_vars[j]==-1),
                          bits=bits)
     ci[j,] = (a$int-null_value[j]) * mj # Unstandardize (mult by norm of vj)
     tailarea[j,] = a$tailarea
@@ -268,7 +243,51 @@ fixedLassoInf <- function(x, y, beta,
 }
 }
 
+
+
 #############################
+
+## write the active part of debiased estimator in terms of y
+## beta^DL[active_set] = My+null_value
+affine_approximate = function(Xint, hbeta, active_set, lambda, debias_mat, linesearch.try){
+  
+   XS = Xint[, active_set]
+   hbetaS = hbeta[active_set]
+   pp=ncol(Xint)
+   n=nrow(Xint)
+   nactive=length(active_set)
+   hsigmaS = 1/n*(t(XS)%*%XS) # hsigma[S,S]
+   hsigmaSinv = solve(hsigmaS) # pinv(hsigmaS)
+  
+   FS = rbind(diag(nactive), matrix(0,pp-nactive,nactive))
+   GS = cbind(diag(nactive), matrix(0,nactive,pp-nactive))
+             
+   is_wide = n < (2 * pp) # somewhat arbitrary decision -- it is really for when we don't want to form with pxp matrices
+   
+   # Approximate inverse covariance matrix for when (n < p) from lasso_Inference.R
+   if (debias_mat=="JM"){
+     hsigma = 1/n*(t(Xint)%*%Xint)
+     if (!is_wide) {
+       htheta = debiasingMatrix(hsigma, is_wide, n, active_set, verbose=FALSE, max_try=linesearch.try, warn_kkt=TRUE)
+     } else {
+       htheta = debiasingMatrix(Xint, is_wide, n, active_set, verbose=FALSE, max_try=linesearch.try, warn_kkt=TRUE)
+     }
+     hthetaX = htheta%*% t(Xint)/n
+     ithetasigma = (GS-(htheta%*%hsigma))
+   } else if (debias_mat=="BN"){
+     hthetaX = approximate_BN(Xint, active_set) ## htheta times X^T/n
+   }
+   
+   ithetasigma = GS-(hthetaX%*%Xint)
+   M = hthetaX + (ithetasigma%*%FS%*%hsigmaSinv%*%t(XS)/n)
+   
+   # vector which is offset for testing debiased beta's
+   null_value <- ((ithetasigma%*%FS%*%hsigmaSinv)%*%sign(hbetaS))*lambda/n
+   
+   return(list(M=M, null_value=null_value))
+}
+
+########################################
 
 
 fixedLassoPoly =

@@ -35,13 +35,12 @@ randomizedLasso = function(X,
 
     if (is.null(noise_scale)) {
         if (family == "gaussian") {
-            noise_scale = 0.25 * sd(y) * sqrt(mean_diag)
+            noise_scale = 0.5 * sd(y) * sqrt(mean_diag)
         } else if (family == "binomial") {
 	    noise_scale = 0.5 * sd(y) * sqrt(mean_diag) 
         }
     }
     
-    print(c("noise scale", noise_scale))
     if (noise_scale > 0) {
         perturb_ = rnorm(p) * noise_scale
     } else {

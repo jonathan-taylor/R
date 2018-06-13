@@ -3,7 +3,7 @@ library(glmnet)
 library(MASS)
 
 
-debiased_lasso_inference=function(X, y, soln, loss, sigma_est, lambda, debias_mat){
+debiased_lasso_inference = function(X, y, soln, loss, sigma_est, lambda, debias_mat){
   
   n=nrow(X)
   p=ncol(X)
@@ -148,5 +148,5 @@ test_debiased_coverage = function(seed=1, outfile=NULL, debias_mat = "BN", loss=
   return(NULL)
 }
 
-test_debiased_coverage()
+#test_debiased_coverage()
 

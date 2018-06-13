@@ -4,9 +4,10 @@ library(glmnet)
 
 
 test_randomized = function(seed=1, outfile=NULL, type="partial", loss="ls", lambda_frac=0.7,
-                           nrep=50, n=200, p=800, s=30, rho=0.){
+                           nrep=50, n=3000, p=1000, s=30, rho=0.){
   
   snr = sqrt(2*log(p)/n)
+  cat("snr", snr,"\n")
   
   set.seed(seed)
   construct_ci=TRUE
