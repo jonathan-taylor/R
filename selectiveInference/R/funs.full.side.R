@@ -17,8 +17,10 @@ estimate_sigma_data_spliting  = function(X,y, verbose=FALSE){
     }
     if ((nselected>0) & (nselected<length(leftover))){
       LM = lm(y[leftover]~X[leftover,][,selected])
-      sigma_est = sigma_est+sigma(LM)
-      nest = nest+1
+      if (!is.na(sigma(LM))){
+        sigma_est = sigma_est+sigma(LM)
+        nest = nest+1
+      }
     }
   }
   return(sigma_est/nest)
