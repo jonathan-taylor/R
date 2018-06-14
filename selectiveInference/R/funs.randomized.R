@@ -468,7 +468,7 @@ compute_target = function(rand_lasso_soln,
     X_inactive = X[, inactive_set]
     
     if (n<p){
-  
+      ## returns M and null_vector such that My+null_vector gives the active part of the debiased lasso estimator
       Mh = selectiveInference:::affine_approximate(X, lasso.est, active_set, lambda=0, debias_mat=debias_mat, linesearch.try=10)
       M_active = Mh$M  ## |E| \times n
       cov_target = sigma_est^2*M_active %*% t(M_active)
@@ -483,7 +483,9 @@ compute_target = function(rand_lasso_soln,
     residuals = y-X%*%lasso.est
     observed_target = lasso.est[active_set]+M_active %*% residuals
     pseudo_invXactive = solve(t(X_active) %*% X_active) %*% t(X_active)
-    projection_Xactive = X_active %*% pseudo_invXactive # n\times n
+    projection_Xactive = X_active %*% pseudo_invXactive # n\times n 
+    # the following gives the cov(\bar{beta}_E, \hat{beta}^{DL}_E) and cov(X_{-E}^T(y-X_E\bar{beta}_E),\hat{beta}^{DL}_E)
+    # recall \hat{\beta}^{DL}_E expressed in terms of y vector via M_active %*% y+ offset
     crosscov_target_internal = sigma_est^2*rbind(pseudo_invXactive %*% t(M_active), 
                                                  t(X_inactive) %*% (diag(n)- projection_Xactive) %*% t(M_active))
   }
