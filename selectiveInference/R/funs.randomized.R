@@ -414,7 +414,7 @@ conditional_opt_transform = function(noise_scale,
 
 
 compute_target = function(rand_lasso_soln, 
-                          type, 
+                          type, debias_mat = "JM",
                           sigma_est=1,
                           construct_pvalues=NULL,
                           construct_ci=NULL){
@@ -469,42 +469,23 @@ compute_target = function(rand_lasso_soln,
     
     if (n<p){
   
-      Xordered = X[,c(active_set,inactive_set,recursive=T)]
-      hsigmaS = 1/n*(t(X_active)%*%X_active) # hsigma[S,S]
-      hsigmaSinv = solve(hsigmaS) # pinv(hsigmaS)
-      FS = rbind(diag(nactive),matrix(0,p-nactive,nactive))
-      GS = cbind(diag(nactive),matrix(0,nactive,p-nactive))
-      hsigma = 1/n*(t(Xordered)%*%Xordered)
-      is_wide = n < (2 * p)
-      
-      if (!is_wide) {
-        hsigma = 1/n*(t(Xordered)%*%Xordered)
-        htheta = debiasingMatrix(hsigma, is_wide, n, 1:nactive)
-        ithetasigma = (GS-(htheta%*%hsigma))
-      } else {
-        htheta = debiasingMatrix(Xordered, is_wide, n, 1:nactive)
-        ithetasigma = (GS-((htheta%*%t(Xordered)) %*% Xordered)/n)
-      }
-      M_active <- ((htheta%*%t(Xordered))+ithetasigma%*%FS%*%hsigmaSinv%*%t(X_active))/n
-      M_inactive  =  (htheta[, (nactive+1):p]%*%t(X[,inactive_set])/n)
-                       #+ithetasigma_inactive%*%FS%*%hsigmaSinv%*%t(X_active))/n)
-      M_inactive_full = htheta[, (nactive+1)]
-      
+      Mh = selectiveInference:::affine_approximate(X, lasso.est, active_set, lambda=0, debias_mat=debias_mat, linesearch.try=10)
+      M_active = Mh$M  ## |E| \times n
       cov_target = sigma_est^2*M_active %*% t(M_active)
+      
     }
     else{
       pseudo_invX = pinv(crossprod(X))
       M_active = pseudo_invX[active_set,] %*% t(X)
-      M_inactive = (pseudo_invX[,inactive_set] %*% t(X_inactive))[active_set,]
-      
       cov_target = sigma_est^2*pseudo_invX[active_set,active_set]
     }
 
     residuals = y-X%*%lasso.est
-    scalar = 1 #sqrt(n) # JT: this is sigma?
-    observed_target = lasso.est[active_set]+scalar*M_active %*% residuals
-    hat_matrix = X_active %*% solve(t(X_active) %*% X_active)
-    crosscov_target_internal = sigma_est^2*rbind(M_active %*% hat_matrix, t(X_inactive) %*% t(M_inactive))
+    observed_target = lasso.est[active_set]+M_active %*% residuals
+    pseudo_invXactive = solve(t(X_active) %*% X_active) %*% t(X_active)
+    projection_Xactive = X_active %*% pseudo_invXactive # n\times n
+    crosscov_target_internal = sigma_est^2*rbind(pseudo_invXactive %*% t(M_active), 
+                                                 t(X_inactive) %*% (diag(n)- projection_Xactive) %*% t(M_active))
   }
   
   if (!is.null(colnames(X))) {

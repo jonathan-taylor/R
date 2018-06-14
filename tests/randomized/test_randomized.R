@@ -3,8 +3,8 @@ library(selectiveInference)
 library(glmnet)
 
 
-test_randomized = function(seed=1, outfile=NULL, type="partial", loss="ls", lambda_frac=0.7,
-                           nrep=50, n=3000, p=1000, s=30, rho=0.){
+test_randomized = function(seed=1, outfile=NULL, type="full", debias_mat="JM",
+                           loss="ls", lambda_frac=0.7, nrep=50, n=300, p=500, s=30, rho=0.){
   
   snr = sqrt(2*log(p)/n)
   cat("snr", snr,"\n")
@@ -50,7 +50,7 @@ test_randomized = function(seed=1, outfile=NULL, type="partial", loss="ls", lamb
                                                            family=selectiveInference:::family_label(loss),
                                                            condition_subgrad=TRUE)
     
-    targets=selectiveInference:::compute_target(rand_lasso_soln, type=type, sigma_est=sigma_est)
+    targets=selectiveInference:::compute_target(rand_lasso_soln, type=type, sigma_est=sigma_est, debias_mat =debias_mat)
     
     PVS = selectiveInference:::randomizedLassoInf(rand_lasso_soln,
                                                   targets=targets,
