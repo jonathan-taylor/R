@@ -57,7 +57,7 @@ solve_restricted_problem = function(X, y, var, lambda, penalty_factor, loss, alg
   return(restricted_soln)
 }
 
-solve_problem_Q = function(Q_sq, Qbeta_bar, lambda, penalty_factor,
+solve_problem_Q = function(Xdesign, Qbeta_bar, lambda, penalty_factor,
                            max_iter=50,
                            kkt_tol=1.e-4, 
                            objective_tol=1.e-4, 
@@ -65,25 +65,25 @@ solve_problem_Q = function(Q_sq, Qbeta_bar, lambda, penalty_factor,
                            kkt_stop=TRUE,
                            objective_stop=TRUE,	
                            parameter_stop=TRUE){
-  n=nrow(Q_sq)
-  p=ncol(Q_sq)
+  n=nrow(Xdesign)
+  p=ncol(Xdesign)
 
-  Xinfo = Q_sq
   linear_func = -as.numeric(Qbeta_bar)
   soln = as.numeric(rep(0., p))
   ever_active = as.integer(rep(0, p))
   ever_active[1] = 1
   ever_active = as.integer(ever_active)
   nactive = as.integer(1)
-  Xsoln = as.numeric(rep(0, nrow(Xinfo)))
+  Xsoln = as.numeric(rep(0, n))
   gradient = 1. * linear_func 
-  max_active=as.integer(p)
+  max_active = as.integer(p)
   
   linear_func = linear_func/n
   gradient = gradient/n
   
-  #solve_QP_wide solves n*slinear_func^T\beta+\beta^T Xinfo\beta+\sum\lambda_i|\beta_i|
-  result = selectiveInference:::solve_QP_wide(Xinfo,         # this is a design matrix
+  #solve_QP_wide solves n*linear_func^T\beta+1/2(X\beta)^T X\beta+\sum\lambda_i|\beta_i|
+
+  result = selectiveInference:::solve_QP_wide(Xdesign,         # this is a design matrix
                          as.numeric(penalty_factor*lambda),  # vector of Lagrange multipliers
                          0,                          # ridge_term 
                          max_iter, 
@@ -107,7 +107,7 @@ solve_problem_Q = function(Q_sq, Qbeta_bar, lambda, penalty_factor,
 
 # the selection event is |sigma_est^2*(target_cov)^{-1}Z+center|>radius
 # var is one of 1..p variables that we are buliding truncation set for
-truncation_set = function(X, y, Qbeta_bar, QE, Q_sq, 
+truncation_set = function(X, y, Qbeta_bar, QE, Xdesign,
                           target_stat, QiE,
                           var, active_vars,
                           lambda, penalty_factor, loss, algo){
@@ -115,7 +115,7 @@ truncation_set = function(X, y, Qbeta_bar, QE, Q_sq,
   if (algo=="Q"){
     penalty_factor_rest = rep(penalty_factor)
     penalty_factor_rest[var] = 10^10
-    restricted_soln = solve_problem_Q(Q_sq, Qbeta_bar, lambda, penalty_factor=penalty_factor_rest)
+    restricted_soln = solve_problem_Q(Xdesign, Qbeta_bar, lambda, penalty_factor=penalty_factor_rest)
   } else {
     restricted_soln = solve_restricted_problem(X, y, var, lambda, penalty_factor=penalty_factor, loss=loss, algo=algo)
   }
@@ -174,16 +174,18 @@ tnorm.union.surv = function(z, mean, sd, intervals, bits = NULL){
   
   pval = matrix(NA, nrow = dim(intervals)[1], ncol = length(mean))
 
+  print('truncation intervals')
+  print(intervals)
+
   for(jj in 1:dim(intervals)[1]){
     if(z <= intervals[jj,1]){
       pval[jj,] = 1
-    }else if(z >= intervals[jj,2]){
+    } else if(z >= intervals[jj,2]){
       pval[jj,] = 0
-    }else{
+    } else{
       pval[jj,] = selectiveInference:::tnorm.surv(z, mean, sd, intervals[jj,1], intervals[jj,2], bits = bits)
     }
   }
-  
 
   ww = matrix(NA, nrow = dim(intervals)[1], ncol = length(as.vector(mean)))
 
@@ -205,29 +207,14 @@ create_tnorm_interval = function(z, sd, alpha, intervals, gridrange=c(-20,20), g
   fun = function(x) { 
     pv = tnorm.union.surv(z, x, sd, intervals, bits)
     return(pv)
-    #return(2*min(pv,1-pv)) 
   }
   
-  int = selectiveInference:::grid.search(grid, fun, alpha/2, 1-alpha/2, gridpts, griddepth)
-  
-  return(int)
-}
-
-selective_CI = function(observed, variance, sigma_est, center, radius,
-                        alpha=0.1, gridrange=c(-20,20), gridpts=10000, griddepth=2){
-  
-  pivot = function(param){
-    return(test_TG(param, observed, variance, sigma_est, center, radius, alt="upper"))
-  }
-  st.error = sqrt(variance)
-  param_grid = seq(observed+gridrange[1] * st.error, observed+gridrange[2] * st.error, length=gridpts)
-  interval = selectiveInference:::grid.search(param_grid, pivot, alpha/2, 1-alpha/2, gridpts, griddepth)
+  interval = selectiveInference:::grid.search(grid, fun, alpha/2, 1-alpha/2, gridpts, griddepth)
+  #print(c('endpts', fun(interval[1]), fun(interval[2]), alpha/2))
   return(interval)
 }
 
-
 norm = function(x){sqrt(sum(x*x))}
-
 
 pvalue_naive_linear = function(observed, variance){
   pval = pnorm(observed, mean=0, sd = sqrt(variance), lower.tail = FALSE)
@@ -349,18 +336,11 @@ get_QB = function(X, y, soln, active_set, loss, debias_mat){
     QE=Q[active_set,]
     Qi=solve(Q)   ## (X^TWX)^{-1}
     QiE=Qi[active_set, active_set]
-    Q_sq=W_root %*% X
-    #beta_bar = mle(X,y,loss=loss)
-    #print("mle")
-    #print(mle(X,y,loss=loss))
+    Xdesign=W_root %*% X
+
     beta_bar = soln - Qi %*% gradient(X,y,soln, loss=loss)  # beta.hat+(X^TWX)^{-1} (y-\pi(X\beta.hat))
     Qbeta_bar = Q%*%soln - gradient(X,y,soln, loss=loss)
     beta_barE = beta_bar[active_set]
-    
-    
-    #M_active = approximate(W_root %*% X, active_set)
-    #print(QiE-M_active %*% t(M_active))
-    
     
   } else{
     
@@ -374,13 +354,12 @@ get_QB = function(X, y, soln, active_set, loss, debias_mat){
       
     QiE = M_active %*% t(M_active) # size |E|\times |E|
     
-    
     QE = hessian_active(X, soln, loss, active_set)
-    Q_sq = W_root %*% X
+    Xdesign = W_root %*% X
     Qbeta_bar = t(QE)%*%soln[active_set]-gradient(X,y,soln,loss=loss)
   }
   
-  return(list(QE=QE, Q_sq=Q_sq, Qbeta_bar=Qbeta_bar, QiE=QiE, beta_barE=beta_barE))  
+  return(list(QE=QE, Xdesign=Xdesign, Qbeta_bar=Qbeta_bar, QiE=QiE, beta_barE=beta_barE))  
 }
 
 
@@ -402,7 +381,7 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
   begin_setup = Sys.time()
   setup_params = get_QB(X=X, y=y, soln=soln, active_set=active_vars, loss=loss, debias_mat = debias_mat)
   QE=as.matrix(setup_params$QE)
-  Q_sq=setup_params$Q_sq
+  Xdesign=setup_params$Xdesign
   QiE=as.matrix(setup_params$QiE)
   QiE = QiE
   beta_barE = setup_params$beta_barE
@@ -426,7 +405,7 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
     target_cov = as.matrix(QiE)[i,i] * sigma_est^2
     
     begin_TS = Sys.time()
-    TS =  truncation_set(X=X, y=y, Qbeta_bar=Qbeta_bar, QE=QE, Q_sq=Q_sq, 
+    TS =  truncation_set(X=X, y=y, Qbeta_bar=Qbeta_bar, QE=QE, Xdesign=Xdesign, 
                          QiE=QiE[i,i,drop=FALSE], target_stat=target_stat, 
                          var=active_vars[i], active_vars=active_vars,
                          lambda=lambda, penalty_factor=penalty_factor, loss=loss, algo=algo)
@@ -449,8 +428,7 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
         intervals[1,] = c(-Inf, lower)
         intervals[2,] = c(upper, Inf)
         pval = tnorm.union.surv(target_stat, mean=0, sd=sqrt(target_cov), intervals)
-        #pval = test_TG(0, target_stat, target_cov, sigma_est, center, radius, alt="two-sided")
-        pval = 2*min(pval, 1-pval)
+        pval = 2 * min(pval, 1-pval)
         if (verbose==TRUE){
           print(c("target stat", target_stat))
           print(c("target cov", target_cov))
@@ -465,9 +443,6 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
         
         if (construct_ci){
           sel_int = create_tnorm_interval(z=target_stat, sd=sqrt(target_cov), alpha=0.1, intervals=intervals)
-          #print(c("tg intervals", sel_int))
-          #sel_int_new = selective_CI(target_stat, target_cov, sigma_est, center, radius)
-          #print(c("jelena int", sel_int_new))
           naive_int = naive_CI(target_stat, target_cov)
           if (verbose==TRUE){
             cat("sel interval", sel_int, "\n")
