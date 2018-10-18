@@ -56,7 +56,7 @@ test_liu_full = function(seed=1, outfile=NULL, family="gaussian", lambda_frac=0.
     PVS = ROSI(X, 
                y, 
                soln, 
-               lambda=lambda, 
+               lambda=lambda*n, 
                penalty_factor=penalty_factor, 
                dispersion=sigma_est^2, 
                family=family,
@@ -92,8 +92,8 @@ test_liu_full = function(seed=1, outfile=NULL, family="gaussian", lambda_frac=0.
       sel_lengths=c(sel_lengths, as.vector(naive_int[,2]-naive_int[,1]))
       naive_lengths=c(naive_lengths, as.vector(PVS$naive_intervals[,2]-PVS$naive_intervals[,1]))
       #cat("sel cov", sel_coverages, "\n")
-      print(c("selective coverage:", mean(sel_coverages)))
-      print(c("naive coverage:", mean(naive_coverages)))
+      print(c("selective coverage:", mean(sel_coverages, na.rm=TRUE)))
+      print(c("naive coverage:", mean(naive_coverages, na.rm=TRUE)))
       print(c("selective length mean:", mean(sel_lengths)))
       print(c("selective length median:", median(sel_lengths)))
       print(c("naive length mean:", mean(naive_lengths)))
