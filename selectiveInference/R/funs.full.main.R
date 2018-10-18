@@ -230,17 +230,20 @@ naive_CI = function(observed, variance, alpha=0.1){
 
 
 compute_coverage = function(ci, beta){
+
   nactive=length(beta)
   coverage_vector = rep(0, nactive)
   for (i in 1:nactive){
-    if (beta[i]>=ci[1,i] && beta[i]<=ci[2,i]){
+  if(!is.na(ci[i,1]) & !is.na(ci[i,2])) {
+    if (beta[i]>=ci[i,1] && beta[i]<=ci[i,2]){
       coverage_vector[i]=1
     } 
+  } else {
+    coverage_vector[i] = NA
+    }
   }
   return(coverage_vector)
 }
-
-
 
 gradient = function(X,y,beta,loss){
   fit = X %*% beta
@@ -335,7 +338,7 @@ get_QB = function(X, y, soln, active_set, loss, debias_mat){
     Q=hessian(X, soln, loss=loss)  ## X^TWX
     QE=Q[active_set,]
     Qi=solve(Q)   ## (X^TWX)^{-1}
-    QiE=Qi[active_set, active_set]
+    QiE=Qi[active_set,][,active_set]
     Xdesign=W_root %*% X
 
     beta_bar = soln - Qi %*% gradient(X,y,soln, loss=loss)  # beta.hat+(X^TWX)^{-1} (y-\pi(X\beta.hat))
@@ -405,10 +408,19 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
     target_cov = as.matrix(QiE)[i,i] * sigma_est^2
     
     begin_TS = Sys.time()
-    TS =  truncation_set(X=X, y=y, Qbeta_bar=Qbeta_bar, QE=QE, Xdesign=Xdesign, 
-                         QiE=QiE[i,i,drop=FALSE], target_stat=target_stat, 
-                         var=active_vars[i], active_vars=active_vars,
-                         lambda=lambda, penalty_factor=penalty_factor, loss=loss, algo=algo)
+    TS =  truncation_set(X=X, 
+                         y=y, 
+                         Qbeta_bar=Qbeta_bar, 
+                         QE=QE, 
+                         Xdesign=Xdesign, 
+                         QiE=QiE[i,i,drop=FALSE], 
+                         target_stat=target_stat, 
+                         var=active_vars[i], 
+                         active_vars=active_vars,
+                         lambda=lambda, 
+                         penalty_factor=penalty_factor, 
+                         loss=loss, 
+                         algo=algo)
     end_TS = Sys.time()
     if (verbose){
       print(c("current var", active_vars[i]))
@@ -451,7 +463,12 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
           sel_intervals = cbind(sel_intervals, sel_int)
           naive_intervals = cbind(naive_intervals, naive_int)
         }
-      } else{
+      } else { # include it even if wrongly selected
+        pvalues = c(pvalues, NA)
+        selected_vars = c(selected_vars, active_vars[i])
+        naive_pvalues = c(naive_pvalues, NA)
+        naive_intervals = cbind(naive_intervals, rep(NA, 2))
+        sel_intervals = cbind(sel_intervals, rep(NA, 2))
         print("observation not within the truncation limits!")
       }
   }

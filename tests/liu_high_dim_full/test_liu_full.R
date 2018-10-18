@@ -62,8 +62,10 @@ test_liu_full = function(seed=1, outfile=NULL, loss="ls", lambda_frac=0.7,
     pvalues = c(pvalues, PVS$pvalues)
     naive_pvalues = c(naive_pvalues, PVS$naive_pvalues)
     sel_intervals = cbind(sel_intervals, PVS$sel_intervals)  # matrix with two rows
-    naive_intervals = cbind(naive_intervals, PVS$naive_intervals)
+    naive_intervals = rbind(naive_intervals, t(PVS$naive_intervals))
     
+    print('naive intervals')
+    print(naive_intervals)
     if (length(pvalues)>0){
       plot(ecdf(pvalues))
       lines(ecdf(naive_pvalues), col="red")
@@ -72,13 +74,13 @@ test_liu_full = function(seed=1, outfile=NULL, loss="ls", lambda_frac=0.7,
     
     if (construct_ci && length(active_vars)>0){
       
-      sel_coverages=c(sel_coverages, selectiveInference:::compute_coverage(PVS$sel_intervals, beta[active_vars]))
-      naive_coverages=c(naive_coverages, selectiveInference:::compute_coverage(PVS$naive_intervals, beta[active_vars]))
+      sel_coverages=c(sel_coverages, selectiveInference:::compute_coverage(t(PVS$sel_intervals), beta[active_vars]))
+      naive_coverages=c(naive_coverages, selectiveInference:::compute_coverage(t(PVS$naive_intervals), beta[active_vars]))
       sel_lengths=c(sel_lengths, as.vector(PVS$sel_intervals[2,]-PVS$sel_intervals[1,]))
       naive_lengths=c(naive_lengths, as.vector(PVS$naive_intervals[2,]-PVS$naive_intervals[1,]))
       #cat("sel cov", sel_coverages, "\n")
-      print(c("selective coverage:", mean(sel_coverages)))
-      print(c("naive coverage:", mean(naive_coverages)))
+      print(c("selective coverage:", mean(sel_coverages, na.rm=TRUE)))
+      print(c("naive coverage:", mean(naive_coverages, na.rm=TRUE)))
       print(c("selective length mean:", mean(sel_lengths)))
       print(c("selective length median:", median(sel_lengths)))
       print(c("naive length mean:", mean(naive_lengths)))
