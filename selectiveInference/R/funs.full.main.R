@@ -107,8 +107,8 @@ solve_problem_Q = function(Q_sq, Qbeta_bar, lambda, penalty_factor,
 
 # the selection event is |sigma_est^2*(target_cov)^{-1}Z+center|>radius
 # var is one of 1..p variables that we are buliding truncation set for
-truncation_set = function(X, y, Qbeta_bar, QE, Q_sq=Q_sq, sigma_est, 
-                          target_stat, target_cov,
+truncation_set = function(X, y, Qbeta_bar, QE, Q_sq, 
+                          target_stat, QiE,
                           var, active_vars,
                           lambda, penalty_factor, loss, algo){
   
@@ -121,7 +121,7 @@ truncation_set = function(X, y, Qbeta_bar, QE, Q_sq=Q_sq, sigma_est,
   }
   n = nrow(X)
   idx = match(var, active_vars) # active_vars[idx]=var
-  nuisance_res = (Qbeta_bar[var] - sigma_est^2*solve(target_cov) %*% target_stat)/n # nuisance stat restricted to active vars
+  nuisance_res = (Qbeta_bar[var] - solve(QiE) %*% target_stat)/n # nuisance stat restricted to active vars
   center = nuisance_res - (QE[idx,] %*% restricted_soln/n)
   radius = penalty_factor[var]*lambda
   return(list(center=center*n, radius=radius*n))
@@ -404,7 +404,7 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
   QE=as.matrix(setup_params$QE)
   Q_sq=setup_params$Q_sq
   QiE=as.matrix(setup_params$QiE)
-  QiE = QiE * sigma_est^2
+  QiE = QiE
   beta_barE = setup_params$beta_barE
   Qbeta_bar = setup_params$Qbeta_bar
   end_setup = Sys.time()
@@ -423,11 +423,11 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
   for (i in 1:nactive_vars){
     
     target_stat = beta_barE[i]
-    target_cov = as.matrix(QiE)[i,i]
+    target_cov = as.matrix(QiE)[i,i] * sigma_est^2
     
     begin_TS = Sys.time()
-    TS =  truncation_set(X=X, y=y, Qbeta_bar=Qbeta_bar, QE=QE, Q_sq=Q_sq, sigma_est=sigma_est, 
-                         target_cov=target_cov, target_stat=target_stat, 
+    TS =  truncation_set(X=X, y=y, Qbeta_bar=Qbeta_bar, QE=QE, Q_sq=Q_sq, 
+                         QiE=QiE[i,i,drop=FALSE], target_stat=target_stat, 
                          var=active_vars[i], active_vars=active_vars,
                          lambda=lambda, penalty_factor=penalty_factor, loss=loss, algo=algo)
     end_TS = Sys.time()
@@ -440,9 +440,8 @@ inference_debiased_full = function(X, y, soln, lambda, penalty_factor, sigma_est
     center = TS$center
     radius = TS$radius
   
-  
-    lower = target_cov*(-center-radius)/(sigma_est^2)
-    upper = target_cov*(-center+radius)/(sigma_est^2)
+    lower = as.matrix(QiE)[i,i]*(-center-radius)
+    upper = as.matrix(QiE)[i,i]*(-center+radius)
       
     if (target_stat<=lower | target_stat>=upper)
       {
